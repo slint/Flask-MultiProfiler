@@ -1,0 +1,65 @@
+{#
+Copyright (C) 2025 CERN.
+
+Flask-MultiProfiler is free software; you can redistribute it and/or modify
+it under the terms of the MIT License; see LICENSE file for more details.
+#}
+
+{% macro render_report(session_id, report, children) %}
+
+{% set code_link %}
+  {%- if report.has_code_report -%}
+  <a target="_blank"
+    href="{{ url_for('profiler.report_view', session_id=session_id, request_id=report.id, report_type='code') }}"
+    class="header">Code</a>
+  {%- endif -%}
+{% endset %}
+
+{% set sql_link %}
+  {%- if report.has_sql_report -%}
+  <a target="_blank"
+    href="{{ url_for('profiler.report_view', session_id=session_id, request_id=report.id, report_type='sql') }}"
+    class="header">SQL</a>
+  {%- endif -%}
+{% endset %}
+
+{% set search_link %}
+  {%- if report.has_search_report -%}
+  <a target="_blank"
+    href="{{ url_for('profiler.report_view', session_id=session_id, request_id=report.id, report_type='search') }}"
+    class="header">Search</a>
+  {%- endif -%}
+{% endset %}
+
+<div class="item">
+  <i class="file icon"></i>
+  <div class="content">
+    <div class="header">
+      {{ report.context.method }} {{ report.context.url }}
+      (<code>{{ report.context.endpoint }}</code>)
+    </div>
+    <div class="description">
+      Referer: {{ report.context.referrer }}
+      {{ code_link }} {{ sql_link }} {{ search_link }}
+    </div>
+
+    {% if children %}
+
+    <div class="list">
+      <div class="item">
+        <div class="content">
+          <div class="description">
+            <div class="ui relaxed celled list">
+              {% for child in children %}
+                {{ render_report(session_id, child) }}
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endmacro%}

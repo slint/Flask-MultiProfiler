@@ -1,0 +1,52 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright (C) 2025 CERN.
+#
+# Flask-MultiProfiler is free software; you can redistribute it and/or modify
+# it under the terms of the MIT License; see LICENSE file for more details.
+[project]
+name = "flask-multiprofiler"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "CERN", email = "info@inveniosoftware.org" }
+]
+license = "MIT"
+requires-python = ">=3.9"
+dependencies = [
+    "flask>=3.1.2",
+    "pyinstrument>=5.1.1",
+    "sqlalchemy>=2.0.43",
+    "sqltap>=0.3.0",
+]
+
+[project.optional-dependencies]
+opensearch = [
+    "opensearch-py~=2.1.1",
+]
+elasticsearch = [
+    "elasticsearch~=7.17.12",
+]
+
+[build-system]
+requires = ["uv_build>=0.8.14,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "flask-sqlalchemy>=3.1.1",
+    "pytest>=8.4.1",
+    "pytest-cov>=6.2.1",
+    "pytest-flask>=1.3.0",
+    "testcontainers>=4.12.0",
+    "psycopg2-binary>=2.9.10",
+    "beautifulsoup4>=4.13.5",
+    "pdbpp>=0.11.7",
+]
+
+[tool.pytest.ini_options]
+addopts = "--cov=flask_multiprofiler --cov=tests --cov-report=term-missing --cov-branch --cov-fail-under=80 --cov-config=pyproject.toml"
+testpaths = [
+    "tests",
+]

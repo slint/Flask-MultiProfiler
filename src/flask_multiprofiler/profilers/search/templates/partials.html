@@ -1,0 +1,439 @@
+{#
+Copyright (C) 2025 CERN.
+
+Flask-MultiProfiler is free software; you can redistribute it and/or modify
+it under the terms of the MIT License; see LICENSE file for more details.
+#}
+
+{# Macro for rendering a complete request-response query #}
+{% macro render_query(request, response) %}
+{% set req_data = request.parsed_data or {} %}
+{% set resp_data = response.parsed_data or {} %}
+{% set method = req_data.method or "GET" %}
+{% set path = req_data.path or "/" %}
+{% set status_code = resp_data.status_code %}
+{% set duration_ms = resp_data.duration_ms %}
+
+<div class="query">
+    <div class="query-summary">
+        <span class="method {{ method.lower() }}">{{ method }}</span>
+        <span>{{ path }}</span>
+        {% if status_code %}
+            {% set status_class = "success" if 200 <= status_code < 300 else "error" if status_code >= 400 else "info" %}
+            <span class="status-code {{ status_class }}">{{ status_code }}</span>
+        {% endif %}
+        {% if duration_ms %}
+            <span class="duration">{{ "%.1f"|format(duration_ms) }}ms</span>
+        {% endif %}
+    </div>
+    <div class="query-content">
+        <div class="side-by-side-container">
+            {{ render_request_body_only(request, req_data) }}
+            {{ render_response_body_only(response, resp_data) }}
+        </div>
+        {% if request.stack_trace %}
+            {{ render_stack_trace(request.stack_trace, "Stack Trace", true) }}
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{# Macro for rendering an orphaned request (no response) #}
+{% macro render_orphaned_request(request) %}
+{% set req_data = request.parsed_data or {} %}
+<div class="query orphaned">
+    <div class="query-summary orphaned-summary">
+        <span class="orphaned-label">⚠ ORPHANED REQUEST</span>
+        <span class="orphaned-note">No response received</span>
+    </div>
+    <div class="query-content">
+        {{ render_request(request, req_data) }}
+    </div>
+</div>
+{% endmacro %}
+
+{# Macro for rendering an orphaned response (no request) #}
+{% macro render_orphaned_response(response) %}
+{% set resp_data = response.parsed_data or {} %}
+<div class="query orphaned">
+    <div class="query-summary orphaned-summary">
+        <span class="orphaned-label">⚠ ORPHANED RESPONSE</span>
+        <span class="orphaned-note">No matching request found</span>
+    </div>
+    <div class="query-content">
+        {{ render_response(response, resp_data) }}
+    </div>
+</div>
+{% endmacro %}
+
+{# Macro for rendering a request entry #}
+{% macro render_request(query, parsed_data) %}
+{% set method = parsed_data.method or "GET" %}
+{% set path = parsed_data.path or "/" %}
+{% set query_params = parsed_data.query_params or {} %}
+{% set headers = parsed_data.headers or {} %}
+{% set body_json = parsed_data.body_json %}
+
+{% set query_params_str = query_params.items()|map('join', '=')|join('&') if query_params else '' %}
+{% set interesting_headers = {} %}
+{% if headers %}
+  {% for key, value in headers.items() %}
+    {% if not (key == 'Content-Type' and value == 'application/json') %}
+      {% set _ = interesting_headers.update({key: value}) %}
+    {% endif %}
+  {% endfor %}
+{% endif %}
+{% set headers_str = interesting_headers.items()|map('join', ': ')|join('\n') if interesting_headers else 'None' %}
+
+<div class="query-entry request-entry" data-id="{{ query.id }}">
+    <div class="query-header">
+        <span class="entry-type">REQUEST</span>
+        <span class="method {{ method.lower() }}">{{ method }}</span>
+        <span class="path">{{ path }}</span>
+        <span class="timestamp">{{ query.timestamp.strftime("%H:%M:%S.%f")[:-3] }}</span>
+    </div>
+    <div class="query-details">
+        <div class="query-params">
+            <strong>Query Parameters:</strong>
+            <pre>{{ query_params_str if query_params_str else "None" }}</pre>
+        </div>
+        {% if interesting_headers and interesting_headers|length > 0 %}
+        <div class="headers">
+            <strong>Headers:</strong>
+            <pre>{{ headers_str }}</pre>
+        </div>
+        {% endif %}
+        {% if body_json %}
+        <div class="request-body">
+            <pre class="json-body" data-label="Request Body">{{ body_json | json_pretty }}</pre>
+        </div>
+        {% endif %}
+        {% if query.stack_trace %}
+            {{ render_stack_trace(query.stack_trace, "Stack Trace") }}
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{# Macro for rendering a response entry #}
+{% macro render_response(query, parsed_data) %}
+{% set status_code = parsed_data.status_code %}
+{% set duration_ms = parsed_data.duration_ms %}
+{% set body_json = parsed_data.body_json %}
+{% set parse_error = parsed_data.parse_error %}
+
+{% set status_class = "" %}
+{% if status_code %}
+    {% set status_class = "success" if 200 <= status_code < 300 else "error" if status_code >= 400 else "info" %}
+{% endif %}
+
+<div class="query-entry response-entry" data-id="{{ query.id }}">
+    <div class="query-header">
+        <span class="entry-type">RESPONSE</span>
+        {% if status_code %}
+            <span class="status-code {{ status_class }}">{{ status_code }}</span>
+        {% endif %}
+        {% if duration_ms %}
+            <span class="duration">{{ "%.1f"|format(duration_ms) }}ms</span>
+        {% endif %}
+        <span class="timestamp">{{ query.timestamp.strftime("%H:%M:%S.%f")[:-3] }}</span>
+    </div>
+
+    {% if body_json or parse_error or parsed_data.body %}
+    <div class="query-details">
+        <div class="response-body">
+            {% if body_json %}
+                <pre class="json-body" data-label="Response Body">{{ body_json | json_pretty }}</pre>
+            {% elif parse_error %}
+                <pre class="parse-error">Parse Error: {{ parse_error }}</pre>
+            {% elif parsed_data.body %}
+                <pre class="raw-body">{{ parsed_data.body }}</pre>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Macro for rendering request body only (for side-by-side display) #}
+{% macro render_request_body_only(query, parsed_data) %}
+{% set method = parsed_data.method or "GET" %}
+{% set path = parsed_data.path or "/" %}
+{% set query_params = parsed_data.query_params or {} %}
+{% set headers = parsed_data.headers or {} %}
+{% set body_json = parsed_data.body_json %}
+
+{% set query_params_str = query_params.items()|map('join', '=')|join('&') if query_params else '' %}
+{% set interesting_headers = {} %}
+{% if headers %}
+  {% for key, value in headers.items() %}
+    {% if not (key == 'Content-Type' and value == 'application/json') %}
+      {% set _ = interesting_headers.update({key: value}) %}
+    {% endif %}
+  {% endfor %}
+{% endif %}
+{% set headers_str = interesting_headers.items()|map('join', ': ')|join('\n') if interesting_headers else 'None' %}
+
+<div class="request-body-section">
+    <div class="body-header">
+        <span class="entry-type">REQUEST</span>
+        <span class="method {{ method.lower() }}">{{ method }}</span>
+        <span class="path">{{ path }}{% if query_params_str %}?{{ query_params_str }}{% endif %}</span>
+        <span class="timestamp">{{ query.timestamp.strftime("%H:%M:%S.%f")[:-3] }}</span>
+    </div>
+    <div class="body-content">
+        {% if interesting_headers and interesting_headers|length > 0 %}
+        <div class="headers">
+            <strong>Headers:</strong>
+            <pre>{{ headers_str }}</pre>
+        </div>
+        {% endif %}
+        {% if body_json %}
+        <div class="request-body">
+            <pre class="json-body" data-label="Request Body">{{ body_json | json_pretty }}</pre>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{# Macro for rendering response body only (for side-by-side display) #}
+{% macro render_response_body_only(query, parsed_data) %}
+{% set status_code = parsed_data.status_code %}
+{% set duration_ms = parsed_data.duration_ms %}
+{% set body_json = parsed_data.body_json %}
+{% set parse_error = parsed_data.parse_error %}
+
+{% set status_class = "" %}
+{% if status_code %}
+    {% set status_class = "success" if 200 <= status_code < 300 else "error" if status_code >= 400 else "info" %}
+{% endif %}
+
+<div class="response-body-section">
+    <div class="body-header">
+        <span class="entry-type">RESPONSE</span>
+        {% if status_code %}
+            <span class="status-code {{ status_class }}">{{ status_code }}</span>
+        {% endif %}
+        {% if duration_ms %}
+            <span class="duration">{{ "%.1f"|format(duration_ms) }}ms</span>
+        {% endif %}
+        <span class="timestamp">{{ query.timestamp.strftime("%H:%M:%S.%f")[:-3] }}</span>
+    </div>
+
+    {% if body_json or parse_error or parsed_data.body %}
+    <div class="body-content">
+        <div class="response-body">
+            {% if body_json %}
+                <pre class="json-body" data-label="Response Body">{{ body_json | json_pretty }}</pre>
+            {% elif parse_error %}
+                <pre class="parse-error">Parse Error: {{ parse_error }}</pre>
+            {% elif parsed_data.body %}
+                <pre class="raw-body">{{ parsed_data.body }}</pre>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Macro for rendering an unparsed entry #}
+{% macro render_unparsed(query) %}
+<div class="query-entry unparsed-entry" data-id="{{ query.id }}">
+    <div class="query-header">
+        <span class="entry-type">UNPARSED</span>
+        <span class="timestamp">{{ query.timestamp.strftime("%H:%M:%S.%f")[:-3] }}</span>
+    </div>
+    <pre class="query-message">{{ query.message }}</pre>
+</div>
+{% endmacro %}
+
+{# Macro for rendering a master panel item (compact view) #}
+{% macro render_master_item(item, index) %}
+<div class="master-item" data-index="{{ index }}">
+    {% if item.type == "query" %}
+        {% set req_data = item.request.parsed_data or {} %}
+        {% set resp_data = item.response.parsed_data or {} %}
+        {% set method = req_data.method or "GET" %}
+        {% set path = req_data.path or "/" %}
+        {% set status_code = resp_data.status_code %}
+        {% set duration_ms = resp_data.duration_ms %}
+        {% set status_class = "success" if status_code and 200 <= status_code < 300 else "error" if status_code and status_code >= 400 else "info" %}
+
+        <div class="master-summary">
+            <div class="master-line">
+                <span class="method {{ method.lower() }}">{{ method }}</span>
+                <span class="path">{{ path }}</span>
+                {% if status_code %}
+                    <span class="status-code {{ status_class }}">{{ status_code }}</span>
+                {% endif %}
+            </div>
+            <div class="master-meta">
+                {% if duration_ms %}
+                    <span class="duration">{{ "%.1f"|format(duration_ms) }}ms</span>
+                {% endif %}
+                <span class="sequence">[{{ index + 1 }}]</span>
+            </div>
+        </div>
+    {% elif item.type == "orphaned_request" %}
+        {% set req_data = item.request.parsed_data or {} %}
+        {% set method = req_data.method or "GET" %}
+        {% set path = req_data.path or "/" %}
+
+        <div class="master-summary orphaned">
+            <div class="master-line">
+                <span class="method {{ method.lower() }}">{{ method }}</span>
+                <span class="path">{{ path }}</span>
+                <span class="orphaned-indicator">⚠ NO RESPONSE</span>
+            </div>
+            <div class="master-meta">
+                <span class="sequence">[{{ index + 1 }}]</span>
+            </div>
+        </div>
+    {% elif item.type == "orphaned_response" %}
+        {% set resp_data = item.response.parsed_data or {} %}
+        {% set status_code = resp_data.status_code %}
+        {% set duration_ms = resp_data.duration_ms %}
+        {% set status_class = "success" if status_code and 200 <= status_code < 300 else "error" if status_code and status_code >= 400 else "info" %}
+
+        <div class="master-summary orphaned">
+            <div class="master-line">
+                <span class="orphaned-indicator">⚠ NO REQUEST</span>
+                {% if status_code %}
+                    <span class="status-code {{ status_class }}">{{ status_code }}</span>
+                {% endif %}
+            </div>
+            <div class="master-meta">
+                {% if duration_ms %}
+                    <span class="duration">{{ "%.1f"|format(duration_ms) }}ms</span>
+                {% endif %}
+                <span class="sequence">[{{ index + 1 }}]</span>
+            </div>
+        </div>
+    {% elif item.type == "unparsed" %}
+        <div class="master-summary unparsed">
+            <div class="master-line">
+                <span class="unparsed-indicator">⚠ UNPARSED</span>
+                <span class="path">{{ item.entry.message[:50] }}...</span>
+            </div>
+            <div class="master-meta">
+                <span class="sequence">[{{ index + 1 }}]</span>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Macro for rendering a detail panel item (full view) #}
+{% macro render_detail_item(item, index) %}
+<div class="detail-item" data-index="{{ index }}">
+    {% if item.type == "query" %}
+        <div class="detail-header">
+            <h3>Query Details [{{ index + 1 }}]</h3>
+        </div>
+        {{ render_query(item.request, item.response) }}
+    {% elif item.type == "orphaned_request" %}
+        <div class="detail-header">
+            <h3>Orphaned Request [{{ index + 1 }}]</h3>
+        </div>
+        {{ render_orphaned_request(item.request) }}
+    {% elif item.type == "orphaned_response" %}
+        <div class="detail-header">
+            <h3>Orphaned Response [{{ index + 1 }}]</h3>
+        </div>
+        {{ render_orphaned_response(item.response) }}
+    {% elif item.type == "unparsed" %}
+        <div class="detail-header">
+            <h3>Unparsed Entry [{{ index + 1 }}]</h3>
+        </div>
+        {{ render_unparsed(item.entry) }}
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Macro for rendering stack frame with locals #}
+{% macro render_frame(frame, index) %}
+<div class="stack-frame" data-frame-index="{{ index }}">
+    <div class="frame-header">
+        <div class="frame-location">
+            <span class="frame-file">{{ frame.filename }}</span>:
+            <span class="frame-line">{{ frame.lineno }}</span>
+            in <span class="frame-function">{{ frame.function }}</span>
+        </div>
+        {% if frame.locals %}
+        <button class="frame-toggle expanded" onclick="toggleFrameDetails(this, {{ index }})">
+            <span class="toggle-icon">−</span>
+            <span class="locals-count">{{ frame.locals|length }} locals</span>
+        </button>
+        {% endif %}
+    </div>
+
+    {% if frame.source_context %}
+    <div class="frame-source">
+        <pre class="source-code">
+{%- for line_info in frame.source_context.lines %}
+<span class="source-line {% if line_info.current %}current-line{% endif %}" data-lineno="{{ line_info.lineno }}">{{ "%4d"|format(line_info.lineno) }} {{ line_info.code }}</span>
+{%- endfor %}
+        </pre>
+    </div>
+    {% endif %}
+
+    {% if frame.locals %}
+    <div class="frame-locals">
+        <table class="locals-table">
+            <thead>
+                <tr>
+                    <th>Variable</th>
+                    <th>Type</th>
+                    <th>Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for name, info in frame.locals.items() %}
+                <tr class="local-var">
+                    <td class="var-name">{{ name }}</td>
+                    <td class="var-type">{{ info.type }}</td>
+                    <td class="var-value">
+                        {{ render_value(info) }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{# Macro for rendering values - now much simpler with primitive data #}
+{% macro render_value(value_info) %}
+{% if not value_info %}
+    <span class="value-error">No value information</span>
+{% else %}
+    <span class="value-display value-type-{{ value_info.type|lower|replace('.', '-') }}">
+        <span class="value-content">{{ value_info.display|e }}</span>
+        {% if value_info.truncated %}
+            <span class="truncated-indicator">⚠ truncated</span>
+        {% endif %}
+    </span>
+{% endif %}
+{% endmacro %}
+
+{# Macro for rendering stack trace with toggle for locals/source #}
+{% macro render_stack_trace(stack_trace, title="Stack Trace", expanded=False) %}
+<div class="stack-trace-container {% if expanded %}expanded{% else %}collapsed{% endif %}">
+    <div class="stack-trace-header">
+        <h4>{{ title }} (most recent call first)</h4>
+        <div class="stack-controls">
+            <button class="enhance-toggle" onclick="toggleEnhancedMode(this)">
+                <span class="toggle-icon">{% if expanded %}▼{% else %}▶{% endif %}</span>
+            </button>
+        </div>
+    </div>
+    <div class="stack-trace-content" {% if not expanded %}style="display: none;"{% endif %}>
+        {% for frame in stack_trace %}
+            {{ render_frame(frame, loop.index0) }}
+        {% endfor %}
+    </div>
+</div>
+{% endmacro %}

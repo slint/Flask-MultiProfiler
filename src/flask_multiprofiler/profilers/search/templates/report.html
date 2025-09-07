@@ -1,0 +1,226 @@
+{#
+Copyright (C) 2025 CERN.
+
+Flask-MultiProfiler is free software; you can redistribute it and/or modify
+it under the terms of the MIT License; see LICENSE file for more details.
+#}
+{% from 'partials.html' import render_query, render_orphaned_request, render_orphaned_response, render_unparsed, render_master_item, render_detail_item %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Search Queries Report</title>
+    <style>
+        {% include 'styles.css' %}
+    </style>
+</head>
+<body>
+    <div class="search-queries-structured">
+        <div class="master-panel">
+            <div class="master-header">
+                <h3>Search Queries ({{ entries|length }}){% if total_time > 0 %} - Total: {{ "%.1f"|format(total_time) }}ms{% endif %}</h3>
+            </div>
+            <div class="master-list">
+                {% for item in entries %}
+                    {{ render_master_item(item, loop.index0) }}
+                {% endfor %}
+            </div>
+        </div>
+        <div class="detail-panel">
+            <div class="detail-placeholder">
+                <h3>Select a query to view details</h3>
+                <p>Click on any query in the left panel to see its complete request and response information.</p>
+            </div>
+            {% for item in entries %}
+                {{ render_detail_item(item, loop.index0) }}
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const masterItems = document.querySelectorAll('.master-item');
+            const detailPanel = document.querySelector('.detail-panel');
+            const detailPlaceholder = document.querySelector('.detail-placeholder');
+            const detailItems = document.querySelectorAll('.detail-item');
+
+            // Hide all detail items initially
+            detailItems.forEach(item => item.style.display = 'none');
+
+            masterItems.forEach((item, index) => {
+                item.addEventListener('click', function() {
+                    // Remove active state from all items
+                    masterItems.forEach(i => i.classList.remove('active'));
+                    // Add active state to clicked item
+                    item.classList.add('active');
+
+                    // Hide placeholder and all detail items
+                    detailPlaceholder.style.display = 'none';
+                    detailItems.forEach(detailItem => detailItem.style.display = 'none');
+
+                    // Show corresponding detail item
+                    const targetDetail = document.querySelector('.detail-item[data-index="' + index + '"]');
+                    if (targetDetail) {
+                        targetDetail.style.display = 'block';
+                    }
+                });
+            });
+
+            // Show first item by default if any items exist
+            if (masterItems.length > 0) {
+                masterItems[0].click();
+            }
+        });
+
+        // Stack trace toggle function
+        function toggleStackTrace(button) {
+            const container = button.closest('.stack-trace-container');
+            const content = container.querySelector('.stack-trace-content');
+            const icon = button.querySelector('.toggle-icon');
+
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                icon.textContent = '▲';
+                button.innerHTML = '<span class="toggle-icon">▲</span> Hide Stack';
+                container.classList.add('expanded');
+                container.classList.remove('collapsed');
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▼';
+                button.innerHTML = '<span class="toggle-icon">▼</span> Show Stack';
+                container.classList.add('collapsed');
+                container.classList.remove('expanded');
+            }
+        }
+
+        // Stack trace filter toggle function
+        function toggleStackFilter(button) {
+            const container = button.closest('.stack-trace-container');
+            const filteredTrace = container.querySelector('.stack-trace-filtered');
+            const fullTrace = container.querySelector('.stack-trace-full');
+            const filterText = button.querySelector('.filter-text');
+
+            if (filteredTrace.style.display === 'none') {
+                // Switch to filtered view
+                filteredTrace.style.display = 'block';
+                fullTrace.style.display = 'none';
+                filterText.textContent = 'Filtered';
+                button.classList.remove('full-mode');
+            } else {
+                // Switch to full view
+                filteredTrace.style.display = 'none';
+                fullTrace.style.display = 'block';
+                filterText.textContent = 'Full';
+                button.classList.add('full-mode');
+            }
+        }
+
+        // Frame locals toggle function
+        function toggleFrameDetails(button, frameIndex) {
+            const frame = button.closest('.stack-frame');
+            const locals = frame.querySelector('.frame-locals');
+            const icon = button.querySelector('.toggle-icon');
+
+            // Check if currently expanded (button has 'expanded' class)
+            if (button.classList.contains('expanded')) {
+                locals.style.display = 'none';
+                icon.textContent = '+';
+                button.classList.remove('expanded');
+            } else {
+                locals.style.display = 'block';
+                icon.textContent = '−';  // This is a minus sign (U+2212)
+                button.classList.add('expanded');
+            }
+        }
+
+        // Stack trace toggle function
+        function toggleEnhancedMode(button) {
+            const container = button.closest('.stack-trace-container');
+            const content = container.querySelector('.stack-trace-content');
+            const icon = button.querySelector('.toggle-icon');
+
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                if (icon) icon.textContent = '▼';
+                container.classList.add('expanded');
+                container.classList.remove('collapsed');
+            } else {
+                content.style.display = 'none';
+                if (icon) icon.textContent = '▶';
+                container.classList.add('collapsed');
+                container.classList.remove('expanded');
+            }
+        }
+    </script>
+
+    <!-- Load svelte-jsoneditor from CDN -->
+    <script type="module">
+        import { createJSONEditor } from 'https://unpkg.com/vanilla-jsoneditor/standalone.js';
+
+        // Store editor instances for cleanup
+        const editors = new Map();
+
+        // Initialize JSON viewers after DOM loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeJSONViewers();
+        });
+
+        function initializeJSONViewers() {
+            // Find all JSON content containers
+            const jsonContainers = document.querySelectorAll('.json-body');
+
+            jsonContainers.forEach((container, index) => {
+                const jsonText = container.textContent;
+                let jsonData;
+
+                try {
+                    jsonData = JSON.parse(jsonText);
+                } catch (e) {
+                    // If parsing fails, keep the original pre element
+                    return;
+                }
+
+                // Create wrapper for the editor
+                const wrapper = document.createElement('div');
+                wrapper.className = 'json-editor-wrapper';
+                wrapper.innerHTML = `
+                    <div class="json-editor-container" id="json-editor-${index}"></div>
+                `;
+
+                // Replace the pre element with the editor wrapper
+                container.parentElement.replaceChild(wrapper, container);
+
+                // Create the JSON editor
+                const editor = createJSONEditor({
+                    target: document.getElementById(`json-editor-${index}`),
+                    props: {
+                        content: {
+                            json: jsonData
+                        },
+                        mode: 'tree',
+                        mainMenuBar: true,  // Enable menu bar for search
+                        navigationBar: true,
+                        statusBar: false,
+                        readOnly: true,
+                        indentation: 2,
+                    }
+                });
+                // Expand all nodes up to 6 levels deep
+                editor.expand([], relativePath => relativePath.length < 6);
+
+                // Store editor reference
+                editors.set(index, { editor, data: jsonData });
+            });
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            editors.forEach(({ editor }) => {
+                if (editor && editor.destroy) {
+                    editor.destroy();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
