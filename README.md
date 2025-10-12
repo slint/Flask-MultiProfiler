@@ -66,15 +66,21 @@ MULTIPROFILER_PERMISSION = lambda: current_user.is_admin
 
 ## Development
 
+This project uses [`uv`](https://docs.astral.sh/uv/) for dependency management and [`just`](https://github.com/casey/just) for task automation. Tests use [`testcontainers`](https://testcontainers-python.readthedocs.io/) to run PostgreSQL and OpenSearch in Docker containers.
+
 ```bash
-# Install development dependencies
-uv pip install -e .[dev]
+# Run tests (automatically installs dependencies)
+just test
 
-# Run tests
-uv run pytest
+# Run specific tests or with custom pytest flags
+just test tests/test_extension.py
+just test -v -k "test_specific"
 
-# Run tests with coverage
-uv run pytest --cov=flask_multiprofiler
+# Format code
+just format
+
+# Lint and auto-fix
+just lint
 ```
 
 ## Architecture
@@ -104,7 +110,7 @@ Planned features and improvements:
 This module intentionally keeps things simple and will **not** support:
 
 - **Customizing rendering**: Reports are stored as fully renderable HTML pages to keep complexity low
-- **REST API**: No plans to expose profiling data via API endpointt
+- **REST API**: No plans to expose profiling data via API endpoint
 - **Async support**: Focused on traditional Flask applications only
 - **Full type hints**: Minimal type annotations to maintain simplicity
 - **Translations/I18N**: This is an sysadmin/developer interface

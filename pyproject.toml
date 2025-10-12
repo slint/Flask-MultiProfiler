@@ -7,7 +7,7 @@
 [project]
 name = "flask-multiprofiler"
 version = "0.1.0"
-description = "Add your description here"
+description = "A Flask extension that provides multi-dimensional profiling capabilities for Flask applications"
 readme = "README.md"
 authors = [
     { name = "CERN", email = "info@inveniosoftware.org" }
