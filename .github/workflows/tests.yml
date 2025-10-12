@@ -1,0 +1,53 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright (C) 2025 CERN.
+#
+# Flask-MultiProfiler is free software; you can redistribute it and/or modify
+# it under the terms of the MIT License; see LICENSE file for more details.
+
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+      - 'maint-**'
+      - 'feature/**'
+  pull_request:
+    branches:
+      - master
+      - 'maint-**'
+      - 'feature/**'
+
+jobs:
+  tests:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.12"]
+
+    env:
+      UV_SYSTEM_PYTHON: 1  # Force uv to install dependencies in the system-managed Python
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          uv pip install -e .[opensearch] --group dev
+          uv pip list
+
+      - name: Run tests
+        run: pytest
