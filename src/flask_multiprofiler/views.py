@@ -44,6 +44,16 @@ def add_active_session():
     return {"active_session": current_multiprofiler.active_session}
 
 
+def parse_form_bool(key: str) -> bool:
+    """Parse boolean form flags with explicit false-like value support."""
+    value = request.form.get(key)
+    if value is None:
+        return False
+
+    normalized = str(value).strip().lower()
+    return normalized not in {"", "0", "false", "off", "no"}
+
+
 def group_requests_by_referrer(sess_requests: list) -> list[dict]:
     """Group request sessions by referrer path.
 
@@ -137,9 +147,9 @@ def start_session():
     else:
         current_multiprofiler.active_session = {
             "id": secure_filename(request.form["id"]),
-            "code": request.form.get("code", type=bool),
-            "sql": request.form.get("sql", type=bool),
-            "search": request.form.get("search", type=bool),
+            "code": parse_form_bool("code"),
+            "sql": parse_form_bool("sql"),
+            "search": parse_form_bool("search"),
         }
     return redirect(url_for("profiler.index"), 303)
 
