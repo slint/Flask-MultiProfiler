@@ -199,3 +199,24 @@ class TestMultiProfilerExtension:
             updated_expiry = session["profiler_session"]["expires_at"]
 
         assert updated_expiry > old_expiry
+
+    def test_missing_expires_at_in_session_does_not_crash_request(self, tmp_path):
+        """Malformed session payload without expires_at must not break request lifecycle."""
+        test_app = Flask(__name__)
+        test_app.config["SECRET_KEY"] = "test-secret-key"
+        test_app.config["MULTIPROFILER_STORAGE"] = tmp_path / "profiler"
+        MultiProfiler(test_app)
+
+        @test_app.get("/ping")
+        def ping():
+            return {"ok": True}
+
+        client = test_app.test_client()
+        with client.session_transaction() as session:
+            session["profiler_session"] = {"id": "broken-session"}
+
+        response = client.get("/ping")
+        assert response.status_code == 200
+
+        with client.session_transaction() as session:
+            assert "profiler_session" not in session
