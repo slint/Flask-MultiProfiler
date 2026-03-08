@@ -4,6 +4,10 @@
 #
 # Flask-MultiProfiler is free software; you can redistribute it and/or modify
 # it under the terms of the MIT License; see LICENSE file for more details.
+import logging
+import threading
+import uuid
+
 import pytest
 from bs4 import BeautifulSoup
 
@@ -12,6 +16,7 @@ from flask_multiprofiler.profilers import (
     SearchProfiler,
     SQLProfiler,
 )
+from flask_multiprofiler.profilers.search import SearchProfilerRenderer
 
 
 class TestCodeProfiler:
@@ -167,6 +172,63 @@ class TestSearchProfiler:
         # Handler should be removed during cleanup
         final_handlers_count = len(profiler.logger.handlers)
         assert final_handlers_count < original_handlers_count
+
+    def test_search_profiler_does_not_capture_other_thread_logs(self):
+        """Each profiler instance must only capture records from its own thread."""
+        logger_name = f"tests.search.{uuid.uuid4().hex}"
+        logger = logging.getLogger(logger_name)
+        logger.handlers.clear()
+        logger.propagate = False
+
+        ready = threading.Event()
+        release = threading.Event()
+        worker_profiler = {}
+
+        def worker():
+            profiler = SearchProfiler(logger_name)
+            profiler.start()
+            worker_profiler["instance"] = profiler
+            ready.set()
+            release.wait()
+            profiler.cleanup()
+
+        worker_thread = threading.Thread(target=worker)
+        worker_thread.start()
+        ready.wait()
+
+        main_profiler = SearchProfiler(logger_name)
+        main_profiler.start()
+
+        try:
+            logger.debug("curl -XGET 'http://localhost:9200/test-index/_search' -d '{}'")
+            logger.debug('#[200] (0.001s)\n#{"took":1}')
+
+            assert len(main_profiler.collector.queries) == 2
+            assert len(worker_profiler["instance"].collector.queries) == 0
+        finally:
+            main_profiler.cleanup()
+            release.set()
+            worker_thread.join()
+
+
+class TestSearchRenderer:
+    """Test the SearchProfilerRenderer behavior."""
+
+    def test_interleaved_request_response_correlation(self):
+        """Interleaved request-response pairs should correlate in FIFO order."""
+        entries = [
+            {"id": "req-a", "entry_type": "request"},
+            {"id": "req-b", "entry_type": "request"},
+            {"id": "res-a", "entry_type": "response"},
+            {"id": "res-b", "entry_type": "response"},
+        ]
+
+        correlated = SearchProfilerRenderer().correlate_entries(entries)
+        assert [item["type"] for item in correlated] == ["query", "query"]
+        assert correlated[0]["request"]["id"] == "req-a"
+        assert correlated[0]["response"]["id"] == "res-a"
+        assert correlated[1]["request"]["id"] == "req-b"
+        assert correlated[1]["response"]["id"] == "res-b"
 
 
 class TestProfilerImplementations:
