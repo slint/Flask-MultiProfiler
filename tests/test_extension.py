@@ -220,3 +220,10 @@ class TestMultiProfilerExtension:
 
         with client.session_transaction() as session:
             assert "profiler_session" not in session
+
+    def test_dashboard_timestamp_is_utc_aware(self, client):
+        """Test app timestamps should include explicit UTC offset."""
+        response = client.get("/dashboard")
+        assert response.status_code == 200
+        payload = response.get_json()
+        assert payload["timestamp"].endswith("+00:00")
