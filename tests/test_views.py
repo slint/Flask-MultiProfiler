@@ -332,6 +332,19 @@ class TestViewsFlashMessages:
                 flashes.get("error")
                 == "You don't have an active profiling session running"
             )
+
+    def test_start_session_parses_falsey_form_values_as_false(self, client):
+        """False-like form values should not enable profilers."""
+        response = client.post(
+            "/profiler/start",
+            data={"id": "flags-check", "code": "false", "sql": "0", "search": ""},
+        )
+        assert response.status_code == 303
+
+        with client.session_transaction() as session:
+            assert session["profiler_session"]["code"] is False
+            assert session["profiler_session"]["sql"] is False
+            assert session["profiler_session"]["search"] is False
             session["_flashes"] = []  # Clear for next test
 
         # Start a session - should not show flash
