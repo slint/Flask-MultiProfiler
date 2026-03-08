@@ -248,6 +248,14 @@ class TestViewsIntegration:
         # Should contain the profiler template content
         assert response.content_type == "text/html; charset=utf-8"
 
+    def test_clear_sessions_endpoint_missing_storage_dir(self, client, app, tmp_path):
+        """Clear endpoint should not fail when storage directory doesn't exist."""
+        missing_storage = tmp_path / "does-not-exist"
+        app.config["MULTIPROFILER_STORAGE"] = missing_storage
+
+        response = client.post("/profiler/delete")
+        assert response.status_code == 303
+
 
 class TestViewsFlashMessages:
     """Test flash messages in profiler views using session inspection."""
