@@ -172,3 +172,30 @@ class TestMultiProfilerExtension:
 
         response = client.get("/profiler/")
         assert response.status_code == 200
+
+    def test_session_refresh_persists_to_client_cookie(self, tmp_path):
+        """Session expiration must be extended when refresh condition is met."""
+        test_app = Flask(__name__)
+        test_app.config["SECRET_KEY"] = "test-secret-key"
+        test_app.config["MULTIPROFILER_STORAGE"] = tmp_path / "profiler"
+        test_app.config["MULTIPROFILER_ACTIVE_SESSION_LIFETIME"] = timedelta(minutes=60)
+        test_app.config["MULTIPROFILER_ACTIVE_SESSION_REFRESH"] = timedelta(minutes=120)
+
+        MultiProfiler(test_app)
+
+        @test_app.get("/ping")
+        def ping():
+            return {"ok": True}
+
+        client = test_app.test_client()
+        old_expiry = datetime.now(timezone.utc) + timedelta(minutes=1)
+        with client.session_transaction() as session:
+            session["profiler_session"] = {"id": "refresh-check", "expires_at": old_expiry}
+
+        response = client.get("/ping")
+        assert response.status_code == 200
+
+        with client.session_transaction() as session:
+            updated_expiry = session["profiler_session"]["expires_at"]
+
+        assert updated_expiry > old_expiry
