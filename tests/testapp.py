@@ -8,7 +8,7 @@
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from flask import Blueprint, current_app
 from flask_sqlalchemy import SQLAlchemy
@@ -22,7 +22,9 @@ class User(db.Model):
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(100), unique=True, nullable=False)
     active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(
+        db.DateTime, default=lambda: datetime.now(timezone.utc)
+    )
 
     posts = db.relationship("Post", backref="author", lazy="dynamic")
 
@@ -32,7 +34,9 @@ class Post(db.Model):
     title = db.Column(db.String(200), nullable=False)
     content = db.Column(db.Text)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(
+        db.DateTime, default=lambda: datetime.now(timezone.utc)
+    )
 
     comments = db.relationship("Comment", backref="post", lazy="dynamic")
 
@@ -42,7 +46,9 @@ class Comment(db.Model):
     content = db.Column(db.Text, nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     post_id = db.Column(db.Integer, db.ForeignKey("post.id"), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(
+        db.DateTime, default=lambda: datetime.now(timezone.utc)
+    )
 
     user = db.relationship("User")
 
@@ -184,7 +190,7 @@ def dashboard():
             "avg_length": float(post_stats.avg_length) if post_stats.avg_length else 0,
         },
         "search_query": search_query,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -236,5 +242,5 @@ def search_duplicate():
     )
     return {
         "results": results["hits"]["total"]["value"],
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
