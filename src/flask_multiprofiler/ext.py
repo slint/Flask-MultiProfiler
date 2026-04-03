@@ -31,6 +31,7 @@ class MultiProfiler:
 
         @app.before_request
         def _setup_profilers():
+            """Clean expired sessions, set up and start profilers."""
             self.cleanup_expired_session()
             self.setup_request_profiling()
 
