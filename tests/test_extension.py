@@ -49,7 +49,7 @@ class TestMultiProfilerExtension:
         assert app.config["MULTIPROFILER_SEARCH_TRACE_LOGGER"] == "opensearchpy.trace"
         assert "static" in app.config["MULTIPROFILER_IGNORED_ENDPOINTS"]
         assert callable(app.config["MULTIPROFILER_PERMISSION"])
-        assert app.config["MULTIPROFILER_BASE_TEMPLATE"] == "base.html"
+        assert app.config["MULTIPROFILER_BASE_TEMPLATE"] == "profiler/base.html"
 
     def test_custom_config_values(self):
         """Test that custom configuration values are preserved."""
