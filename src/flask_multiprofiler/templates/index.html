@@ -12,10 +12,10 @@ it under the terms of the MIT License; see LICENSE file for more details.
 {% block title %}Profiler{% endblock title %}
 
 {% block page_body %}
-<div class="ui container">
+<div id="profiler-container" class="ui container">
   <div class="ui grid">
     <div class="two column row">
-      <div class="five wide column">
+      <div id="profiler-controls" class="five wide column">
         <h2>Profiler</h2>
         {% if active_session %}
         <dl>
@@ -55,7 +55,7 @@ it under the terms of the MIT License; see LICENSE file for more details.
               <label for="search">Search profiler</label>
             </div>
           </div>
-          <button class="ui positive button" type="submit">
+          <button id="start-button" class="ui positive button" type="submit">
             <i class="play icon"></i>
             Start
           </button>
@@ -64,17 +64,17 @@ it under the terms of the MIT License; see LICENSE file for more details.
       </div>
 
       {# Sessions list #}
-      <div class="nine wide column">
+      <div id="profiler-sessions-list" class="nine wide column">
         <h2>Sessions</h2>
         {% if profiler_sessions %}
         <form class="ui form" action="delete" method="post">
-          <button class="ui button" type="submit">
+          <button id="clear-button" class="ui negative basic button" type="submit">
             <i class="trash icon"></i>
             Clear sessions
           </button>
         </form>
         {% endif %}
-        <div class="ui accordion">
+        <div class="ui sessions accordion">
           {% for session_id, grouped_requests in profiler_sessions.items() %}
           <div class="title {{ 'active' if active_session.id == session_id }}">
             <i class="dropdown icon"></i>{{ session_id }}
