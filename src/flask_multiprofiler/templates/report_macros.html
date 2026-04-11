@@ -31,7 +31,7 @@ it under the terms of the MIT License; see LICENSE file for more details.
   {%- endif -%}
 {% endset %}
 
-<div class="item">
+<div class="parent session item">
   <i class="file icon"></i>
   <div class="content">
     <div class="header">
@@ -44,9 +44,8 @@ it under the terms of the MIT License; see LICENSE file for more details.
     </div>
 
     {% if children %}
-
-    <div class="list">
-      <div class="item">
+    <div class="child session list">
+      <div class="child session item">
         <div class="content">
           <div class="description">
             <div class="ui relaxed celled list">
