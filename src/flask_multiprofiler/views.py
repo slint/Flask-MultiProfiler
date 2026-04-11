@@ -139,7 +139,7 @@ def index():
         grouped_sessions[sess_id] = group_requests_by_referrer(sess_requests)
 
     return render_template(
-        "index.html",
+        "profiler/index.html",
         profiler_sessions=grouped_sessions,
     )
 

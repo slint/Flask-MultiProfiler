@@ -126,7 +126,7 @@ class MultiProfiler:
         app.config.setdefault("MULTIPROFILER_PERMISSION", lambda: True)
 
         # Set default base template if not configured
-        app.config.setdefault("MULTIPROFILER_BASE_TEMPLATE", "base.html")
+        app.config.setdefault("MULTIPROFILER_BASE_TEMPLATE", "profiler/base.html")
 
     @property
     def active_session(self):
